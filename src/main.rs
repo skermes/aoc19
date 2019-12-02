@@ -3,6 +3,7 @@
 
 mod problem;
 mod days;
+mod intcode;
 
 use std::io::Read;
 use std::fs::File;
