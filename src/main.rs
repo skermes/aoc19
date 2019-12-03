@@ -8,6 +8,7 @@ mod intcode;
 use std::io::Read;
 use std::fs::File;
 use structopt::StructOpt;
+use std::time::{Instant, Duration};
 
 use crate::problem::Problem;
 use crate::days::one::DayOne;
@@ -72,6 +73,16 @@ fn day2problem(day: usize) -> Option<Box<dyn Problem>> {
     }
 }
 
+fn duration_str(duration: Duration) -> String {
+    let millis = duration.as_millis();
+
+    if millis == 0 {
+        format!("{}us", duration.as_micros())
+    } else {
+        format!("{}ms", millis)
+    }
+}
+
 fn main() -> std::io::Result<()> {
     let args = Args::from_args();
 
@@ -87,12 +98,28 @@ fn main() -> std::io::Result<()> {
         }
     };
 
-    // let mut input = String::new();
-    // input_file.read_to_string(&mut input)?;
-
     let day = day2problem(args.day).unwrap();
-    println!("{}", day.part_one(&input));
-    println!("{}", day.part_two(&input));
+
+    println!(
+        "======================= Day {} =============================\n",
+        args.day
+    );
+
+    let start_one = Instant::now();
+    let solution_one = day.part_one(&input);
+    let duration_one = duration_str(start_one.elapsed());
+
+    println!("Part One:");
+    println!("    Solution: {}", solution_one);
+    println!("    Duration: {}\n", duration_one);
+
+    let start_two = Instant::now();
+    let solution_two = day.part_two(&input);
+    let duration_two = duration_str(start_two.elapsed());
+
+    println!("Part One:");
+    println!("    Solution: {}", solution_two);
+    println!("    Duration: {}\n", duration_two);
 
     Ok(())
 }
