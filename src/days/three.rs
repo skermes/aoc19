@@ -112,21 +112,27 @@ fn extend_point(anchor: Point, step: &Move) -> Vec<Point> {
     }
 }
 
-fn spaces_traversed(moves: &[Move]) -> HashSet<Point> {
-    let mut points = HashSet::new();
+fn spaces_traversed(moves: &[Move]) -> Vec<Point> {
+    let mut points = Vec::new();
     let mut turtle = Point { x: 0, y: 0 };
 
     for step in moves {
         let new_points = extend_point(turtle, step);
         // Looked at input, there are no 0 moves so this should always work.
         turtle = new_points.get(new_points.len() - 1).unwrap().clone();
-
-        for point in new_points {
-            points.insert(point);
-        }
+        points.extend(new_points);
     }
 
     points
+}
+
+fn find_index(points: &Vec<Point>, target: &Point) -> Option<usize> {
+    for (i, point) in points.iter().enumerate() {
+        if point == target {
+            return Some(i);
+        }
+    }
+    None
 }
 
 impl Problem for DayThree {
@@ -134,12 +140,15 @@ impl Problem for DayThree {
         let lines: Vec<&str> = input.split_whitespace().collect();
 
         // Assume two lines by problem definition.
-        let spaces_one = spaces_traversed(
-            &Move::move_list_from_str(lines[0]).unwrap()
+        let mut spaces_one = HashSet::new();
+        spaces_one.extend(
+            spaces_traversed(&Move::move_list_from_str(lines[0]).unwrap())
         );
-        let spaces_two = spaces_traversed(
-            &Move::move_list_from_str(lines[1]).unwrap()
+        let mut spaces_two = HashSet::new();
+        spaces_two.extend(
+            spaces_traversed(&Move::move_list_from_str(lines[1]).unwrap())
         );
+
         let closest_crossing = spaces_one.intersection(&spaces_two)
             .min_by_key(|p| p.manhattan_magnitude())
             // Assume there's at least one crossing by problem definition.
@@ -149,7 +158,31 @@ impl Problem for DayThree {
     }
 
     fn part_two(&self, input: &str) -> String {
-        format!("{}", "Part two not yet implemented.")
+        let lines: Vec<&str> = input.split_whitespace().collect();
+
+        let spaces_one = spaces_traversed(
+            &Move::move_list_from_str(lines[0]).unwrap()
+        );
+        let spaces_two = spaces_traversed(
+            &Move::move_list_from_str(lines[1]).unwrap()
+        );
+
+        let mut set_one: HashSet<Point> = HashSet::new();
+        set_one.extend(&spaces_one);
+        let mut set_two = HashSet::new();
+        set_two.extend(&spaces_two);
+
+        let fastest_crossing = set_one.intersection(&set_two)
+            .min_by_key(|p| find_index(&spaces_one, p).unwrap() + find_index(&spaces_two, p).unwrap())
+            .unwrap();
+
+        format!(
+            "{}",
+              find_index(&spaces_one, fastest_crossing).unwrap()
+            + find_index(&spaces_two, fastest_crossing).unwrap()
+            // 2 here to account for find_index being 0-indexed.
+            + 2
+        )
     }
 }
 
@@ -162,8 +195,10 @@ mod tests {
         let moves_one = Move::move_list_from_str("R8,U5,L5,D3")?;
         let moves_two = Move::move_list_from_str("U7,R6,D4,L4")?;
 
-        let spaces_one = spaces_traversed(&moves_one);
-        let spaces_two = spaces_traversed(&moves_two);
+        let mut spaces_one = HashSet::new();
+        spaces_one.extend(spaces_traversed(&moves_one));
+        let mut spaces_two = HashSet::new();
+        spaces_two.extend(spaces_traversed(&moves_two));
 
         let common: Vec<Point> = spaces_one.intersection(&spaces_two)
             .cloned()
