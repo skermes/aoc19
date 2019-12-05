@@ -1,56 +1,24 @@
-use std::error::Error;
-use std::fmt;
+use thiserror::Error;
 
+#[derive(Debug)]
 pub enum Opcodes {
     Add,
     Multiply,
     Halt
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum OperationalError {
+    #[error("`{0}` is not a known opcode.")]
     InvalidOpcode(usize),
+    #[error("Index {0} is outside this machine's memory.")]
     OutOfRange(usize)
 }
 
-impl fmt::Display for OperationalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OperationalError::InvalidOpcode(code) => {
-                write!(f, "{} is not a known opcode.", code)
-            },
-            OperationalError::OutOfRange(index) => {
-                write!(f, "Index {} is outside this machine's memory.", index)
-            }
-        }
-    }
-}
-
-impl Error for OperationalError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParseError {
+    #[error("Intcode programs must be integers, not `{0}`.")]
     NotAnInteger(String)
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::NotAnInteger(code) => {
-                write!(f, "Opcodes must be integer, not: {}.", code)
-            }
-        }
-    }
-}
-
-impl Error for ParseError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
 }
 
 impl Opcodes {
