@@ -7,10 +7,16 @@ type Address = usize;
 pub enum OperationalError {
     #[error("`{0}` is not a known opcode.")]
     InvalidOpcode(Value),
+    #[error("`{0}` is not a known parameter mode.")]
+    InvalidParameterMode(Value),
     #[error("Index {0} is outside this machine's memory.")]
     OutOfRange(Address),
     #[error("Index {0} is negative.")]
-    NegativeAddress(Value)
+    NegativeAddress(Value),
+    #[error("Instruction {0} is negative.")]
+    NegativeInstruction(Value),
+    #[error("Instruction has too many parameter mode digits for operation: {0}.")]
+    TooManyParameterModes(Value)
 }
 
 #[derive(Debug, Error)]
@@ -51,7 +57,7 @@ impl IntoAddress for i32 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Opcode {
     Add,
     Multiply,
@@ -66,6 +72,81 @@ impl Opcode {
             99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
         }
+    }
+
+    fn parameter_count(&self) -> usize {
+        match self {
+            Opcode::Add => 3,
+            Opcode::Multiply => 3,
+            Opcode::Halt => 0
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ParameterMode {
+    Positional,
+    Immediate
+}
+
+impl ParameterMode {
+    fn from_int(value: Option<&Value>) -> Result<Self, OperationalError> {
+        match value {
+            Some(val) => {
+                match val {
+                    0 => Ok(ParameterMode::Positional),
+                    1 => Ok(ParameterMode::Immediate),
+                    _ => Err(OperationalError::InvalidParameterMode(*val))
+                }
+            },
+            None => {
+                Ok(ParameterMode::Positional)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Parameter {
+    value: Value,
+    mode: ParameterMode
+}
+
+fn digits(n: isize) -> Vec<isize> {
+    if n < 10 {
+        vec![n]
+    } else {
+        let mut rest = digits(n / 10);
+        rest.push(n % 10);
+        rest
+    }
+}
+
+#[derive(Debug)]
+struct Instruction {
+    opcode: Opcode,
+    parameters: Vec<Parameter>
+}
+
+impl Instruction {
+    fn op_and_mode_digits(value: &Value) -> Result<(Opcode, Vec<isize>), OperationalError> {
+        if value < &0 {
+            return Err(OperationalError::NegativeInstruction(*value));
+        }
+
+        let opcode = Opcode::from_int(*value % 100)?;
+
+        let mode_part = *value / 100;
+        let mode_digits: Vec<isize>;
+        if mode_part == 0 {
+            mode_digits = Vec::new();
+        } else {
+            mode_digits = digits(mode_part);
+        }
+
+        // Reverse here because of the weird way the mode digits are set; see
+        // problem description.
+        Ok((opcode, mode_digits.into_iter().rev().collect()))
     }
 }
 
@@ -95,42 +176,13 @@ impl Machine {
         })
     }
 
-    pub fn step(&self) -> Result<Machine, OperationalError> {
-        let mut next = self.clone();
-
-        if self.is_halted {
-            Ok(next)
-        } else {
-            let opcode = Opcode::from_int(self.slots[self.pointer])?;
-
-            match opcode {
-                Opcode::Halt => {
-                    next.is_halted = true;
-                },
-                Opcode::Add => {
-                    let left = self.get(*self.get(self.pointer + 1)?)?;
-                    let right = self.get(*self.get(self.pointer + 2)?)?;
-                    let store = self.get(self.pointer + 3)?;
-
-                    next.set(*store, left + right)?;
-                    next.pointer = self.pointer + 4;
-                },
-                Opcode::Multiply => {
-                    let left = self.get(*self.get(self.pointer + 1)?)?;
-                    let right = self.get(*self.get(self.pointer + 2)?)?;
-                    let store = self.get(self.pointer + 3)?;
-
-                    next.set(*store, left * right)?;
-                    next.pointer = self.pointer + 4;
-                }
-            };
-
-            Ok(next)
-        }
+    fn step(&self) -> Result<Machine, OperationalError> {
+        self.execute_instruction(&self.read_instruction()?)
     }
 
     pub fn run_to_halt(&self) -> Result<Machine, OperationalError> {
-        let next = self.step()?;
+        let next = self.execute_instruction(&self.read_instruction()?)?;
+        // let next = self.step()?;
         if next.is_halted {
             Ok(next)
         } else {
@@ -155,6 +207,66 @@ impl Machine {
             },
             None => Err(OperationalError::OutOfRange(addr))
         }
+    }
+
+    fn get_parameter_val(&self, parameter: &Parameter) -> Result<Value, OperationalError> {
+        match parameter.mode {
+            ParameterMode::Positional => Ok(*self.get(parameter.value)?),
+            ParameterMode::Immediate => Ok(parameter.value)
+        }
+    }
+
+    fn read_instruction(&self) -> Result<Instruction, OperationalError> {
+        let instruction_val = self.get(self.pointer)?;
+        let (opcode, mode_digits) = Instruction::op_and_mode_digits(instruction_val)?;
+
+        if mode_digits.len() > opcode.parameter_count() {
+            return Err(OperationalError::TooManyParameterModes(*instruction_val))
+        }
+
+        let mut parameters = Vec::new();
+        for i in 0..opcode.parameter_count() {
+            let mode = ParameterMode::from_int(mode_digits.get(i))?;
+            let param_val = self.get(self.pointer + i + 1)?;
+            parameters.push(Parameter { value: *param_val, mode: mode });
+        }
+
+        Ok(Instruction{
+            opcode: opcode,
+            parameters: parameters
+        })
+    }
+
+    fn execute_instruction(&self, instruction: &Instruction) -> Result<Machine, OperationalError> {
+        let mut next = self.clone();
+        if self.is_halted {
+            return Ok(next);
+        }
+
+        // Assuming in this block that we have the right number of parameters
+        // in our instructions because of how we construct them in
+        // read_instruction.
+        match instruction.opcode {
+            Opcode::Halt => {
+                next.is_halted = true;
+            },
+            Opcode::Add => {
+                let left = self.get_parameter_val(&instruction.parameters[0])?;
+                let right = self.get_parameter_val(&instruction.parameters[1])?;
+
+                next.set(instruction.parameters[2].value, left + right)?;
+            },
+            Opcode::Multiply => {
+                let left = self.get_parameter_val(&instruction.parameters[0])?;
+                let right = self.get_parameter_val(&instruction.parameters[1])?;
+
+                next.set(instruction.parameters[2].value, left * right)?;
+            }
+        }
+
+        // +1 for the instruction itself.
+        next.pointer += instruction.opcode.parameter_count() + 1;
+        Ok(next)
     }
 }
 
@@ -210,6 +322,35 @@ mod tests {
         let halted = machine.run_to_halt()?;
         assert_eq!(3500, halted.slots[0]);
         assert_eq!(true, halted.is_halted);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_digits() {
+        assert_eq!(vec![1, 0], digits(10));
+    }
+
+    #[test]
+    fn op_and_modes_add() -> Result<(), OperationalError> {
+        let (op, modes) = Instruction::op_and_mode_digits(&1)?;
+        assert_eq!(Opcode::Add, op);
+        let empty: Vec<isize> = Vec::new();
+        assert_eq!(empty, modes);
+
+        let (op2, modes2) = Instruction::op_and_mode_digits(&1001)?;
+        assert_eq!(Opcode::Add, op2);
+        assert_eq!(vec![0, 1], modes2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn op_and_modes_halt() -> Result<(), OperationalError> {
+        let (op, modes) = Instruction::op_and_mode_digits(&99)?;
+        assert_eq!(Opcode::Halt, op);
+        let empty: Vec<isize> = Vec::new();
+        assert_eq!(empty, modes);
 
         Ok(())
     }
