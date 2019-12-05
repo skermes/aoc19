@@ -1,5 +1,40 @@
 use thiserror::Error;
 
+type Value = isize;
+type Address = usize;
+
+pub trait IntoAddress {
+    fn into_addr(self) -> Result<Address, OperationalError>;
+}
+
+impl IntoAddress for Address {
+    fn into_addr(self) -> Result<Address, OperationalError> {
+        Ok(self)
+    }
+}
+
+impl IntoAddress for Value {
+    fn into_addr(self) -> Result<Address, OperationalError> {
+        if self < 0 {
+            Err(OperationalError::NegativeAddress(self))
+        } else {
+            Ok(self as Address)
+        }
+    }
+}
+
+// Not sure why I need this but the compiler is angry at me when I try to use
+// constants...
+impl IntoAddress for i32 {
+    fn into_addr(self) -> Result<Address, OperationalError> {
+        if self < 0 {
+            Err(OperationalError::NegativeAddress(self as Value))
+        } else {
+            Ok(self as Address)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Opcodes {
     Add,
@@ -10,9 +45,11 @@ pub enum Opcodes {
 #[derive(Debug, Error)]
 pub enum OperationalError {
     #[error("`{0}` is not a known opcode.")]
-    InvalidOpcode(usize),
+    InvalidOpcode(Value),
     #[error("Index {0} is outside this machine's memory.")]
-    OutOfRange(usize)
+    OutOfRange(Address),
+    #[error("Index {0} is negative.")]
+    NegativeAddress(Value)
 }
 
 #[derive(Debug, Error)]
@@ -22,7 +59,7 @@ pub enum ParseError {
 }
 
 impl Opcodes {
-    fn from_int(i: usize) -> Result<Self, OperationalError> {
+    fn from_int(i: Value) -> Result<Self, OperationalError> {
         match i {
             1 => Ok(Opcodes::Add),
             2 => Ok(Opcodes::Multiply),
@@ -34,8 +71,8 @@ impl Opcodes {
 
 #[derive(Clone)]
 pub struct Machine {
-    slots: Vec<usize>,
-    pointer: usize,
+    slots: Vec<Value>,
+    pointer: Address,
     is_halted: bool
 }
 
@@ -45,7 +82,7 @@ impl Machine {
         let mut slots = Vec::new();
 
         for token in tokens {
-            slots.push(match usize::from_str_radix(token.trim(), 10) {
+            slots.push(match Value::from_str_radix(token.trim(), 10) {
                 Ok(code) => code,
                 Err(_) => return Err(ParseError::NotAnInteger(token.to_string()))
             });
@@ -101,18 +138,22 @@ impl Machine {
         }
     }
 
-    pub fn get(&self, index: usize) -> Result<&usize, OperationalError> {
-        self.slots.get(index)
-            .ok_or_else(|| OperationalError::OutOfRange(index))
+    pub fn get<I>(&self, index: I) -> Result<&Value, OperationalError>
+    where I: IntoAddress {
+        let addr = index.into_addr()?;
+        self.slots.get(addr)
+            .ok_or_else(|| OperationalError::OutOfRange(addr))
     }
 
-    pub fn set(&mut self, index: usize, new_value: usize) -> Result<(), OperationalError> {
-        match self.slots.get_mut(index) {
+    pub fn set<I>(&mut self, index: I, new_value: Value) -> Result<(), OperationalError>
+    where I: IntoAddress {
+        let addr = index.into_addr()?;
+        match self.slots.get_mut(addr) {
             Some(old_value) => {
                 *old_value = new_value;
                 Ok(())
             },
-            None => Err(OperationalError::OutOfRange(index))
+            None => Err(OperationalError::OutOfRange(addr))
         }
     }
 }
