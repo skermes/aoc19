@@ -3,6 +3,22 @@ use thiserror::Error;
 type Value = isize;
 type Address = usize;
 
+#[derive(Debug, Error)]
+pub enum OperationalError {
+    #[error("`{0}` is not a known opcode.")]
+    InvalidOpcode(Value),
+    #[error("Index {0} is outside this machine's memory.")]
+    OutOfRange(Address),
+    #[error("Index {0} is negative.")]
+    NegativeAddress(Value)
+}
+
+#[derive(Debug, Error)]
+pub enum ParseError {
+    #[error("Intcode programs must be integers, not `{0}`.")]
+    NotAnInteger(String)
+}
+
 pub trait IntoAddress {
     fn into_addr(self) -> Result<Address, OperationalError>;
 }
@@ -40,22 +56,6 @@ pub enum Opcodes {
     Add,
     Multiply,
     Halt
-}
-
-#[derive(Debug, Error)]
-pub enum OperationalError {
-    #[error("`{0}` is not a known opcode.")]
-    InvalidOpcode(Value),
-    #[error("Index {0} is outside this machine's memory.")]
-    OutOfRange(Address),
-    #[error("Index {0} is negative.")]
-    NegativeAddress(Value)
-}
-
-#[derive(Debug, Error)]
-pub enum ParseError {
-    #[error("Intcode programs must be integers, not `{0}`.")]
-    NotAnInteger(String)
 }
 
 impl Opcodes {
