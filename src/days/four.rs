@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::problem::Problem;
 
 const PASSWORD_LOW: usize = 146810;
@@ -13,55 +15,58 @@ fn digits(n: &usize) -> Vec<usize> {
     }
 }
 
-// This is for sure not the most efficient way to do this - not only am I
-// calling digits twice for the same number but I'm then cloning it
-// twice too.  Eh.
-fn digit_pairs(n: &usize) -> Vec<(usize, usize)> {
-    digits(n).iter().cloned().zip(digits(n).iter().cloned().skip(1)).collect()
+fn not_decreasing(n: &usize) -> bool {
+    let mut last_digit = 0;
+    for digit in digits(n) {
+        if digit < last_digit {
+            return false;
+        } else {
+            last_digit = digit;
+        }
+    }
+
+    true
 }
 
-fn has_identical_pair(password: &usize) -> bool {
-    digit_pairs(password)
-        .iter()
-        .any(|(left, right)| left == right)
+fn two_same_adjacent(n: &usize) -> bool {
+    for (key, group) in &digits(n).into_iter().group_by(|x| *x) {
+        // This is a dumb way to count the elements of an iterator, but there's
+        // no built-in len method so needs must...
+        if group.sum::<usize>() >= (2 * key) {
+            return true;
+        }
+    }
+    false
 }
 
-fn no_decreasing_pairs(password: &usize) -> bool {
-    digit_pairs(password)
-        .iter()
-        .all(|(left, right)| left <= right)
+fn exactly_two_same_adjacent(n: &usize) -> bool {
+    for (key, group) in &digits(n).into_iter().group_by(|x| *x) {
+        if group.sum::<usize>() == (2 * key) {
+            return true;
+        }
+    }
+    false
 }
-
-// We only ever construct a range from the digits within bounds.
-#[allow(dead_code)]
-fn within_bounds(password: &usize) -> bool {
-    password >= &PASSWORD_LOW && password <= &PASSWORD_HIGH
-}
-
-// The is-six-digits constraint is implied by being within the input bounds.
-// fn is_valid_password(password: &usize) -> bool {
-//     let pairs = digit_pairs(password);
-
-//     password >= &PASSWORD_LOW &&
-//     password <= &PASSWORD_HIGH &&
-//     has_identical_pair(&pairs) &&
-//     no_decreasing_pairs(&pairs)
-// }
 
 pub struct DayFour {}
 
 impl Problem for DayFour {
     fn part_one(&self, input: &str) -> String {
         let valid_passwords: Vec<usize> = (PASSWORD_LOW..PASSWORD_HIGH + 1)
-            .filter(has_identical_pair)
-            .filter(no_decreasing_pairs)
+            .filter(not_decreasing)
+            .filter(two_same_adjacent)
             .collect();
 
         format!("{}", valid_passwords.len())
     }
 
     fn part_two(&self, input: &str) -> String {
-        format!("{}", "Part two not yet implemented.")
+        let valid_passwords: Vec<usize> = (PASSWORD_LOW..PASSWORD_HIGH + 1)
+            .filter(not_decreasing)
+            .filter(exactly_two_same_adjacent)
+            .collect();
+
+        format!("{}", valid_passwords.len())
     }
 }
 

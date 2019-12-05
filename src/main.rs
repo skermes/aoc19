@@ -1,6 +1,8 @@
 // The stubs for future days have a lot of these, we don't need the warnings.
 #![allow(unused_variables, unused_imports)]
 
+#[macro_use] extern crate itertools;
+
 mod problem;
 mod days;
 mod intcode;
