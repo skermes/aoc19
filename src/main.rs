@@ -41,7 +41,7 @@ use crate::days::twentyfive::DayTwentyFive;
 
 #[derive(Debug, StructOpt)]
 struct Args {
-    day: usize
+    day: Option<usize>
 }
 
 fn day2problem(day: usize) -> Option<Box<dyn Problem>> {
@@ -85,10 +85,8 @@ fn duration_str(duration: Duration) -> String {
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let args = Args::from_args();
-
-    let open = File::open(format!("inputs/{}.txt", args.day));
+fn run_day(day: usize) -> std::io::Result<()> {
+    let open = File::open(format!("inputs/{}.txt", day));
     let input = match open {
         Ok(mut input_file) => {
             let mut buffer = String::new();
@@ -100,15 +98,15 @@ fn main() -> std::io::Result<()> {
         }
     };
 
-    let day = day2problem(args.day).unwrap();
+    let problem = day2problem(day).unwrap();
 
     println!(
         "======================= Day {} =============================\n",
-        args.day
+        day
     );
 
     let start_one = Instant::now();
-    let solution_one = day.part_one(&input);
+    let solution_one = problem.part_one(&input);
     let duration_one = duration_str(start_one.elapsed());
 
     println!("Part One:");
@@ -116,7 +114,7 @@ fn main() -> std::io::Result<()> {
     println!("    Duration: {}\n", duration_one);
 
     let start_two = Instant::now();
-    let solution_two = day.part_two(&input);
+    let solution_two = problem.part_two(&input);
     let duration_two = duration_str(start_two.elapsed());
 
     println!("Part One:");
@@ -124,4 +122,18 @@ fn main() -> std::io::Result<()> {
     println!("    Duration: {}\n", duration_two);
 
     Ok(())
+}
+
+fn main() -> std::io::Result<()> {
+    let args = Args::from_args();
+
+    match args.day {
+        Some(day) => run_day(day),
+        None => {
+            for day in 1..26 {
+                run_day(day)?;
+            }
+            Ok(())
+        }
+    }
 }
