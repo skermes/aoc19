@@ -52,7 +52,7 @@ impl IntoAddress for i32 {
 }
 
 #[derive(Debug)]
-pub enum Opcodes {
+enum Opcodes {
     Add,
     Multiply,
     Halt
