@@ -52,18 +52,18 @@ impl IntoAddress for i32 {
 }
 
 #[derive(Debug)]
-enum Opcodes {
+enum Opcode {
     Add,
     Multiply,
     Halt
 }
 
-impl Opcodes {
+impl Opcode {
     fn from_int(i: Value) -> Result<Self, OperationalError> {
         match i {
-            1 => Ok(Opcodes::Add),
-            2 => Ok(Opcodes::Multiply),
-            99 => Ok(Opcodes::Halt),
+            1 => Ok(Opcode::Add),
+            2 => Ok(Opcode::Multiply),
+            99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
         }
     }
@@ -101,13 +101,13 @@ impl Machine {
         if self.is_halted {
             Ok(next)
         } else {
-            let opcode = Opcodes::from_int(self.slots[self.pointer])?;
+            let opcode = Opcode::from_int(self.slots[self.pointer])?;
 
             match opcode {
-                Opcodes::Halt => {
+                Opcode::Halt => {
                     next.is_halted = true;
                 },
-                Opcodes::Add => {
+                Opcode::Add => {
                     let left = self.get(*self.get(self.pointer + 1)?)?;
                     let right = self.get(*self.get(self.pointer + 2)?)?;
                     let store = self.get(self.pointer + 3)?;
@@ -115,7 +115,7 @@ impl Machine {
                     next.set(*store, left + right)?;
                     next.pointer = self.pointer + 4;
                 },
-                Opcodes::Multiply => {
+                Opcode::Multiply => {
                     let left = self.get(*self.get(self.pointer + 1)?)?;
                     let right = self.get(*self.get(self.pointer + 2)?)?;
                     let store = self.get(self.pointer + 3)?;
