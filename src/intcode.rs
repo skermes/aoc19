@@ -69,7 +69,7 @@ impl Opcodes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Machine {
     slots: Vec<Value>,
     pointer: Address,
