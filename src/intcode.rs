@@ -16,7 +16,9 @@ pub enum OperationalError {
     #[error("Instruction {0} is negative.")]
     NegativeInstruction(Value),
     #[error("Instruction has too many parameter mode digits for operation: {0}.")]
-    TooManyParameterModes(Value)
+    TooManyParameterModes(Value),
+    #[error("Tried to read past end of input")]
+    NoInput
 }
 
 #[derive(Debug, Error)]
@@ -62,6 +64,7 @@ enum Opcode {
     Add,
     Multiply,
     Halt,
+    Input,
     Output
 }
 
@@ -70,6 +73,7 @@ impl Opcode {
         match i {
             1 => Ok(Opcode::Add),
             2 => Ok(Opcode::Multiply),
+            3 => Ok(Opcode::Input),
             4 => Ok(Opcode::Output),
             99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
@@ -80,6 +84,7 @@ impl Opcode {
         match self {
             Opcode::Add => 3,
             Opcode::Multiply => 3,
+            Opcode::Input => 1,
             Opcode::Output => 1,
             Opcode::Halt => 0
         }
@@ -159,10 +164,25 @@ pub struct Machine {
     pointer: Address,
     is_halted: bool,
 
+    input_pointer: Address,
+    pub input: Vec<Value>,
     pub output: Vec<Value>
 }
 
 impl Machine {
+    fn from_slots(slots: Vec<Value>) -> Machine {
+        Machine {
+            slots: slots,
+            pointer: 0,
+            is_halted: false,
+
+            input_pointer: 0,
+            input: Vec::new(),
+
+            output: Vec::new()
+        }
+    }
+
     pub fn from_str(input: &str) -> Result<Machine, ParseError> {
         let tokens = input.split(",");
         let mut slots = Vec::new();
@@ -174,12 +194,7 @@ impl Machine {
             });
         }
 
-        Ok(Machine{
-            slots: slots,
-            pointer: 0,
-            is_halted: false,
-            output: Vec::new()
-        })
+        Ok(Machine::from_slots(slots))
     }
 
     pub fn run_to_halt(&self) -> Result<Machine, OperationalError> {
@@ -264,6 +279,12 @@ impl Machine {
 
                 next.set(instruction.parameters[2].value, left * right)?;
             },
+            Opcode::Input => {
+                let val = self.input.get(self.input_pointer)
+                    .ok_or_else(|| OperationalError::NoInput)?;
+                next.set(instruction.parameters[0].value, *val)?;
+                next.input_pointer = self.input_pointer + 1;
+            }
             Opcode::Output => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
 
@@ -274,6 +295,12 @@ impl Machine {
         // +1 for the instruction itself.
         next.pointer += instruction.opcode.parameter_count() + 1;
         Ok(next)
+    }
+
+    pub fn write(&self, input: Value) -> Machine {
+        let mut next = self.clone();
+        next.input.push(input);
+        next
     }
 }
 
@@ -298,13 +325,7 @@ mod tests {
 
     #[test]
     fn step() -> Result<(), OperationalError> {
-        let machine = Machine {
-            slots: vec![1,9,10,3,2,3,11,0,99,30,40,50],
-            pointer: 0,
-            is_halted: false,
-            output: Vec::new()
-        };
-
+        let machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
         let state2 = machine.execute_instruction(&machine.read_instruction()?)?;
         assert_eq!(70, state2.slots[3]);
@@ -322,12 +343,7 @@ mod tests {
 
     #[test]
     fn run_to_halt() -> Result<(), OperationalError> {
-        let machine = Machine {
-            slots: vec![1,9,10,3,2,3,11,0,99,30,40,50],
-            pointer: 0,
-            is_halted: false,
-            output: Vec::new()
-        };
+        let machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
         let halted = machine.run_to_halt()?;
         assert_eq!(3500, halted.slots[0]);
@@ -367,15 +383,21 @@ mod tests {
 
     #[test]
     fn test_output() -> Result<(), OperationalError> {
-        let machine = Machine {
-            slots: vec![4, 0, 104, 20, 99],
-            pointer: 0,
-            is_halted: false,
-            output: Vec::new()
-        };
+        let machine = Machine::from_slots(vec![4, 0, 104, 20, 99]);
 
         let halted = machine.run_to_halt()?;
         assert_eq!(vec![4, 20], halted.output);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_input() -> Result<(), OperationalError> {
+        let machine = Machine::from_slots(vec![3, 3, 99, 0]);
+        let with_input = machine.write(20);
+
+        let halted = with_input.run_to_halt()?;
+        assert_eq!(20, halted.slots[3]);
 
         Ok(())
     }
