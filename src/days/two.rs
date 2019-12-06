@@ -8,6 +8,10 @@ use crate::intcode::Machine;
 pub struct DayTwo {}
 
 impl Problem for DayTwo {
+    fn name(&self) -> String {
+        "1202 Program Alarm".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let mut machine = Machine::from_str(input).unwrap();
 

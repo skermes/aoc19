@@ -6,6 +6,10 @@ use crate::intcode::Machine;
 pub struct DayFive {}
 
 impl Problem for DayFive {
+    fn name(&self) -> String {
+        "Sunny With a Chance of Asteroids".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let machine = Machine::from_str(input).unwrap();
         let with_input = machine.write(1);

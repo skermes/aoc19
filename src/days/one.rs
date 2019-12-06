@@ -22,6 +22,10 @@ fn fuel_for_mass_and_fuel(mass: usize) -> usize {
 pub struct DayOne {}
 
 impl Problem for DayOne {
+    fn name(&self) -> String {
+        "The Tyranny of the Rocket Equation".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let total_fuel: usize = input.split_whitespace()
             .map(|mstr| usize::from_str_radix(mstr, 10).unwrap())

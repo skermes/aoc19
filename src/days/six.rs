@@ -83,6 +83,10 @@ fn orbital_parents<'a>(graph: &HashMap<&str, &'a str>,
 pub struct DaySix {}
 
 impl Problem for DaySix {
+    fn name(&self) -> String {
+        "Universal Orbit Map".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let graph = orbit_graph(input).unwrap();
         let total_orbits = count_total_orbits(&graph);

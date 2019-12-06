@@ -100,10 +100,8 @@ fn run_day(day: usize) -> std::io::Result<()> {
 
     let problem = day2problem(day).unwrap();
 
-    println!(
-        "======================= Day {} =============================\n",
-        day
-    );
+    let title = format!(" Day {}: {} ", day, problem.name());
+    println!("=========={:=<60}\n", title);
 
     let start_one = Instant::now();
     let solution_one = problem.part_one(&input);

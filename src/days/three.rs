@@ -136,6 +136,10 @@ fn find_index(points: &Vec<Point>, target: &Point) -> Option<usize> {
 }
 
 impl Problem for DayThree {
+    fn name(&self) -> String {
+        "Crossed Wires".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let lines: Vec<&str> = input.split_whitespace().collect();
 

@@ -51,6 +51,10 @@ fn exactly_two_same_adjacent(n: &usize) -> bool {
 pub struct DayFour {}
 
 impl Problem for DayFour {
+    fn name(&self) -> String {
+        "Secure Container".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let valid_passwords: Vec<usize> = (PASSWORD_LOW..PASSWORD_HIGH + 1)
             .filter(not_decreasing)
