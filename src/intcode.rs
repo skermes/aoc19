@@ -63,9 +63,13 @@ impl IntoAddress for i32 {
 enum Opcode {
     Add,
     Multiply,
-    Halt,
     Input,
-    Output
+    Output,
+    JumpIfTrue,
+    JumpIfFalse,
+    LessThan,
+    Equals,
+    Halt
 }
 
 impl Opcode {
@@ -75,6 +79,10 @@ impl Opcode {
             2 => Ok(Opcode::Multiply),
             3 => Ok(Opcode::Input),
             4 => Ok(Opcode::Output),
+            5 => Ok(Opcode::JumpIfTrue),
+            6 => Ok(Opcode::JumpIfFalse),
+            7 => Ok(Opcode::LessThan),
+            8 => Ok(Opcode::Equals),
             99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
         }
@@ -86,6 +94,10 @@ impl Opcode {
             Opcode::Multiply => 3,
             Opcode::Input => 1,
             Opcode::Output => 1,
+            Opcode::JumpIfTrue => 2,
+            Opcode::JumpIfFalse => 2,
+            Opcode::LessThan => 3,
+            Opcode::Equals => 3,
             Opcode::Halt => 0
         }
     }
@@ -260,6 +272,7 @@ impl Machine {
             return Ok(next);
         }
 
+        let mut advance_pointer = true;
         // Assuming in this block that we have the right number of parameters
         // in our instructions because of how we construct them in
         // read_instruction.
@@ -284,16 +297,47 @@ impl Machine {
                     .ok_or_else(|| OperationalError::NoInput)?;
                 next.set(instruction.parameters[0].value, *val)?;
                 next.input_pointer = self.input_pointer + 1;
-            }
+            },
             Opcode::Output => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
 
                 next.output.push(val);
+            },
+            Opcode::JumpIfTrue => {
+                let val = self.get_parameter_val(&instruction.parameters[0])?;
+                if val != 0 {
+                    next.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
+                    advance_pointer = false;
+                }
+            },
+            Opcode::JumpIfFalse => {
+                let val = self.get_parameter_val(&instruction.parameters[0])?;
+                if val == 0 {
+                    next.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
+                    advance_pointer = false;
+                }
+            },
+            Opcode::LessThan => {
+                let left = self.get_parameter_val(&instruction.parameters[0])?;
+                let right = self.get_parameter_val(&instruction.parameters[1])?;
+
+                let value = if left < right { 1 } else { 0 };
+                next.set(instruction.parameters[2].value, value)?;
+            },
+            Opcode::Equals => {
+                let left = self.get_parameter_val(&instruction.parameters[0])?;
+                let right = self.get_parameter_val(&instruction.parameters[1])?;
+
+                let value = if left == right { 1 } else { 0 };
+                next.set(instruction.parameters[2].value, value)?;
             }
         }
 
-        // +1 for the instruction itself.
-        next.pointer += instruction.opcode.parameter_count() + 1;
+        if advance_pointer {
+            // +1 for the instruction itself.
+            next.pointer += instruction.opcode.parameter_count() + 1;
+        }
+
         Ok(next)
     }
 
@@ -398,6 +442,30 @@ mod tests {
 
         let halted = with_input.run_to_halt()?;
         assert_eq!(20, halted.slots[3]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn jump_condition_large_example() -> Result<(), OperationalError> {
+        let machine = Machine::from_slots(vec![
+            3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,
+            1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
+            999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99
+        ]);
+
+        let low_input = machine.write(4);
+        let exact_input = machine.write(8);
+        let high_input = machine.write(12);
+
+        let low_halted = low_input.run_to_halt()?;
+        assert_eq!(vec![999], low_halted.output);
+
+        let exact_halted = exact_input.run_to_halt()?;
+        assert_eq!(vec![1000], exact_halted.output);
+
+        let high_halted = high_input.run_to_halt()?;
+        assert_eq!(vec![1001], high_halted.output);
 
         Ok(())
     }
