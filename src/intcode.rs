@@ -61,7 +61,8 @@ impl IntoAddress for i32 {
 enum Opcode {
     Add,
     Multiply,
-    Halt
+    Halt,
+    Output
 }
 
 impl Opcode {
@@ -69,6 +70,7 @@ impl Opcode {
         match i {
             1 => Ok(Opcode::Add),
             2 => Ok(Opcode::Multiply),
+            4 => Ok(Opcode::Output),
             99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
         }
@@ -78,6 +80,7 @@ impl Opcode {
         match self {
             Opcode::Add => 3,
             Opcode::Multiply => 3,
+            Opcode::Output => 1,
             Opcode::Halt => 0
         }
     }
@@ -154,7 +157,9 @@ impl Instruction {
 pub struct Machine {
     slots: Vec<Value>,
     pointer: Address,
-    is_halted: bool
+    is_halted: bool,
+
+    pub output: Vec<Value>
 }
 
 impl Machine {
@@ -172,12 +177,9 @@ impl Machine {
         Ok(Machine{
             slots: slots,
             pointer: 0,
-            is_halted: false
+            is_halted: false,
+            output: Vec::new()
         })
-    }
-
-    fn step(&self) -> Result<Machine, OperationalError> {
-        self.execute_instruction(&self.read_instruction()?)
     }
 
     pub fn run_to_halt(&self) -> Result<Machine, OperationalError> {
@@ -261,6 +263,11 @@ impl Machine {
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
                 next.set(instruction.parameters[2].value, left * right)?;
+            },
+            Opcode::Output => {
+                let val = self.get_parameter_val(&instruction.parameters[0])?;
+
+                next.output.push(val);
             }
         }
 
@@ -291,21 +298,23 @@ mod tests {
 
     #[test]
     fn step() -> Result<(), OperationalError> {
-        let machine = Machine{
+        let machine = Machine {
             slots: vec![1,9,10,3,2,3,11,0,99,30,40,50],
             pointer: 0,
-            is_halted: false
+            is_halted: false,
+            output: Vec::new()
         };
 
-        let state2 = machine.step()?;
+
+        let state2 = machine.execute_instruction(&machine.read_instruction()?)?;
         assert_eq!(70, state2.slots[3]);
         assert_eq!(false, state2.is_halted);
 
-        let state3 = state2.step()?;
+        let state3 = state2.execute_instruction(&state2.read_instruction()?)?;
         assert_eq!(3500, state3.slots[0]);
         assert_eq!(false, state3.is_halted);
 
-        let state4 = state3.step()?;
+        let state4 = state3.execute_instruction(&state3.read_instruction()?)?;
         assert_eq!(true, state4.is_halted);
 
         Ok(())
@@ -313,10 +322,11 @@ mod tests {
 
     #[test]
     fn run_to_halt() -> Result<(), OperationalError> {
-        let machine = Machine{
+        let machine = Machine {
             slots: vec![1,9,10,3,2,3,11,0,99,30,40,50],
             pointer: 0,
-            is_halted: false
+            is_halted: false,
+            output: Vec::new()
         };
 
         let halted = machine.run_to_halt()?;
@@ -351,6 +361,21 @@ mod tests {
         assert_eq!(Opcode::Halt, op);
         let empty: Vec<isize> = Vec::new();
         assert_eq!(empty, modes);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_output() -> Result<(), OperationalError> {
+        let machine = Machine {
+            slots: vec![4, 0, 104, 20, 99],
+            pointer: 0,
+            is_halted: false,
+            output: Vec::new()
+        };
+
+        let halted = machine.run_to_halt()?;
+        assert_eq!(vec![4, 20], halted.output);
 
         Ok(())
     }
