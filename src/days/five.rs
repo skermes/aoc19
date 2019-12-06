@@ -15,7 +15,11 @@ impl Problem for DayFive {
     }
 
     fn part_two(&self, input: &str) -> String {
-        format!("{}", "Part two not yet implemented.")
+        let machine = Machine::from_str(input).unwrap();
+        let with_input = machine.write(5);
+        let halted = with_input.run_to_halt().unwrap();
+
+        format!("{}", halted.output.iter().join(" "))
     }
 }
 
