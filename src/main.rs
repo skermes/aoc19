@@ -79,7 +79,7 @@ fn duration_str(duration: Duration) -> String {
     let millis = duration.as_millis();
 
     if millis == 0 {
-        format!("{}us", duration.as_micros())
+        format!("{}\u{03BC}s", duration.as_micros())
     } else {
         format!("{}ms", millis)
     }
