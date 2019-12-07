@@ -19,22 +19,23 @@ impl Problem for DayTwo {
         machine.set(1, 12).unwrap();
         machine.set(2, 2).unwrap();
 
-        let halted = machine.run_to_halt().unwrap();
-        format!("{}", halted.get(0).unwrap())
+        machine.run_to_halt().unwrap();
+        format!("{}", machine.get(0).unwrap())
     }
 
     fn part_two(&self, input: &str) -> String {
-        let mut machine = Machine::from_str(input).unwrap();
+        let machine = Machine::from_str(input).unwrap();
         let target = 19690720;
 
         // This is really dumb but I gotta go to work.
         for noun in 0..100 {
             for verb in 0..100 {
-                machine.set(1, noun).unwrap();
-                machine.set(2, verb).unwrap();
+                let mut candidate = machine.clone();
+                candidate.set(1, noun).unwrap();
+                candidate.set(2, verb).unwrap();
 
-                let halted = machine.run_to_halt().unwrap();
-                if *halted.get(0).unwrap() == target {
+                candidate.run_to_halt().unwrap();
+                if *candidate.get(0).unwrap() == target {
                     return format!("{}", 100 * noun + verb);
                 }
             }

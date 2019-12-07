@@ -11,19 +11,19 @@ impl Problem for DayFive {
     }
 
     fn part_one(&self, input: &str) -> String {
-        let machine = Machine::from_str(input).unwrap();
-        let with_input = machine.write(1);
-        let halted = with_input.run_to_halt().unwrap();
+        let mut machine = Machine::from_str(input).unwrap();
+        machine.write(1);
+        machine.run_to_halt().unwrap();
 
-        format!("{}", halted.output.iter().join(" "))
+        format!("{}", machine.output.iter().join(" "))
     }
 
     fn part_two(&self, input: &str) -> String {
-        let machine = Machine::from_str(input).unwrap();
-        let with_input = machine.write(5);
-        let halted = with_input.run_to_halt().unwrap();
+        let mut machine = Machine::from_str(input).unwrap();
+        machine.write(5);
+        machine.run_to_halt().unwrap();
 
-        format!("{}", halted.output.iter().join(" "))
+        format!("{}", machine.output.iter().join(" "))
     }
 }
 

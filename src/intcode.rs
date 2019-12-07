@@ -209,13 +209,13 @@ impl Machine {
         Ok(Machine::from_slots(slots))
     }
 
-    pub fn run_to_halt(&self) -> Result<Machine, OperationalError> {
-        let next = self.execute_instruction(&self.read_instruction()?)?;
-        // let next = self.step()?;
-        if next.is_halted {
-            Ok(next)
+    pub fn run_to_halt(&mut self) -> Result<(), OperationalError> {
+        self.execute_instruction(&self.read_instruction()?)?;
+
+        if self.is_halted {
+            Ok(())
         } else {
-            next.run_to_halt()
+            self.run_to_halt()
         }
     }
 
@@ -266,10 +266,9 @@ impl Machine {
         })
     }
 
-    fn execute_instruction(&self, instruction: &Instruction) -> Result<Machine, OperationalError> {
-        let mut next = self.clone();
+    fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), OperationalError> {
         if self.is_halted {
-            return Ok(next);
+            return Ok(());
         }
 
         let mut advance_pointer = true;
@@ -278,42 +277,42 @@ impl Machine {
         // read_instruction.
         match instruction.opcode {
             Opcode::Halt => {
-                next.is_halted = true;
+                self.is_halted = true;
             },
             Opcode::Add => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
-                next.set(instruction.parameters[2].value, left + right)?;
+                self.set(instruction.parameters[2].value, left + right)?;
             },
             Opcode::Multiply => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
-                next.set(instruction.parameters[2].value, left * right)?;
+                self.set(instruction.parameters[2].value, left * right)?;
             },
             Opcode::Input => {
-                let val = self.input.get(self.input_pointer)
+                let val = *self.input.get(self.input_pointer)
                     .ok_or_else(|| OperationalError::NoInput)?;
-                next.set(instruction.parameters[0].value, *val)?;
-                next.input_pointer = self.input_pointer + 1;
+                self.set(instruction.parameters[0].value, val)?;
+                self.input_pointer = self.input_pointer + 1;
             },
             Opcode::Output => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
 
-                next.output.push(val);
+                self.output.push(val);
             },
             Opcode::JumpIfTrue => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
                 if val != 0 {
-                    next.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
+                    self.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
                     advance_pointer = false;
                 }
             },
             Opcode::JumpIfFalse => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
                 if val == 0 {
-                    next.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
+                    self.pointer = self.get_parameter_val(&instruction.parameters[1])?.into_addr()?;
                     advance_pointer = false;
                 }
             },
@@ -322,29 +321,27 @@ impl Machine {
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
                 let value = if left < right { 1 } else { 0 };
-                next.set(instruction.parameters[2].value, value)?;
+                self.set(instruction.parameters[2].value, value)?;
             },
             Opcode::Equals => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
                 let value = if left == right { 1 } else { 0 };
-                next.set(instruction.parameters[2].value, value)?;
+                self.set(instruction.parameters[2].value, value)?;
             }
         }
 
         if advance_pointer {
             // +1 for the instruction itself.
-            next.pointer += instruction.opcode.parameter_count() + 1;
+            self.pointer += instruction.opcode.parameter_count() + 1;
         }
 
-        Ok(next)
+        Ok(())
     }
 
-    pub fn write(&self, input: Value) -> Machine {
-        let mut next = self.clone();
-        next.input.push(input);
-        next
+    pub fn write(&mut self, input: Value) {
+        self.input.push(input);
     }
 }
 
@@ -369,29 +366,29 @@ mod tests {
 
     #[test]
     fn step() -> Result<(), OperationalError> {
-        let machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
+        let mut machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
-        let state2 = machine.execute_instruction(&machine.read_instruction()?)?;
-        assert_eq!(70, state2.slots[3]);
-        assert_eq!(false, state2.is_halted);
+        machine.execute_instruction(&machine.read_instruction()?)?;
+        assert_eq!(70, machine.slots[3]);
+        assert_eq!(false, machine.is_halted);
 
-        let state3 = state2.execute_instruction(&state2.read_instruction()?)?;
-        assert_eq!(3500, state3.slots[0]);
-        assert_eq!(false, state3.is_halted);
+        machine.execute_instruction(&machine.read_instruction()?)?;
+        assert_eq!(3500, machine.slots[0]);
+        assert_eq!(false, machine.is_halted);
 
-        let state4 = state3.execute_instruction(&state3.read_instruction()?)?;
-        assert_eq!(true, state4.is_halted);
+        machine.execute_instruction(&machine.read_instruction()?)?;
+        assert_eq!(true, machine.is_halted);
 
         Ok(())
     }
 
     #[test]
     fn run_to_halt() -> Result<(), OperationalError> {
-        let machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
+        let mut machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
-        let halted = machine.run_to_halt()?;
-        assert_eq!(3500, halted.slots[0]);
-        assert_eq!(true, halted.is_halted);
+        machine.run_to_halt()?;
+        assert_eq!(3500, machine.slots[0]);
+        assert_eq!(true, machine.is_halted);
 
         Ok(())
     }
@@ -427,21 +424,21 @@ mod tests {
 
     #[test]
     fn test_output() -> Result<(), OperationalError> {
-        let machine = Machine::from_slots(vec![4, 0, 104, 20, 99]);
+        let mut machine = Machine::from_slots(vec![4, 0, 104, 20, 99]);
 
-        let halted = machine.run_to_halt()?;
-        assert_eq!(vec![4, 20], halted.output);
+        machine.run_to_halt()?;
+        assert_eq!(vec![4, 20], machine.output);
 
         Ok(())
     }
 
     #[test]
     fn test_input() -> Result<(), OperationalError> {
-        let machine = Machine::from_slots(vec![3, 3, 99, 0]);
-        let with_input = machine.write(20);
+        let mut machine = Machine::from_slots(vec![3, 3, 99, 0]);
+        machine.write(20);
 
-        let halted = with_input.run_to_halt()?;
-        assert_eq!(20, halted.slots[3]);
+        machine.run_to_halt()?;
+        assert_eq!(20, machine.slots[3]);
 
         Ok(())
     }
@@ -454,18 +451,21 @@ mod tests {
             999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99
         ]);
 
-        let low_input = machine.write(4);
-        let exact_input = machine.write(8);
-        let high_input = machine.write(12);
+        let mut low_input = machine.clone();
+        low_input.write(4);
+        let mut exact_input = machine.clone();
+        exact_input.write(8);
+        let mut high_input = machine.clone();
+        high_input.write(12);
 
-        let low_halted = low_input.run_to_halt()?;
-        assert_eq!(vec![999], low_halted.output);
+        low_input.run_to_halt()?;
+        assert_eq!(vec![999], low_input.output);
 
-        let exact_halted = exact_input.run_to_halt()?;
-        assert_eq!(vec![1000], exact_halted.output);
+        exact_input.run_to_halt()?;
+        assert_eq!(vec![1000], exact_input.output);
 
-        let high_halted = high_input.run_to_halt()?;
-        assert_eq!(vec![1001], high_halted.output);
+        high_input.run_to_halt()?;
+        assert_eq!(vec![1001], high_input.output);
 
         Ok(())
     }
