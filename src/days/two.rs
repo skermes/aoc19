@@ -30,7 +30,7 @@ impl Problem for DayTwo {
         // This is really dumb but I gotta go to work.
         for noun in 0..100 {
             for verb in 0..100 {
-                let mut candidate = machine.duplicate();
+                let mut candidate = machine.clone();
                 candidate.set(1, noun).unwrap();
                 candidate.set(2, verb).unwrap();
 

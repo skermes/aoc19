@@ -1,9 +1,4 @@
 use thiserror::Error;
-use std::sync::mpsc::{
-    channel,
-    Receiver, Sender,
-    RecvError, SendError
-};
 
 type Value = isize;
 type Address = usize;
@@ -22,10 +17,8 @@ pub enum OperationalError {
     NegativeInstruction(Value),
     #[error("Instruction has too many parameter mode digits for operation: {0}.")]
     TooManyParameterModes(Value),
-    #[error("Error receiving input")]
-    InputError(#[from] RecvError),
-    #[error("Error writing input")]
-    OutputError(#[from] SendError<Value>)
+    #[error("Tried to read past end of input")]
+    NoInput
 }
 
 #[derive(Debug, Error)]
@@ -177,34 +170,28 @@ impl Instruction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Machine {
     slots: Vec<Value>,
     pointer: Address,
     is_halted: bool,
 
-    input_reader: Receiver<Value>,
-    pub input: Sender<Value>,
-
-    output_writer: Sender<Value>,
-    pub output: Receiver<Value>
+    input_pointer: Address,
+    pub input: Vec<Value>,
+    pub output: Vec<Value>
 }
 
 impl Machine {
     fn from_slots(slots: Vec<Value>) -> Machine {
-        let (in_write, in_read) = channel();
-        let (out_write, out_read) = channel();
-
         Machine {
             slots: slots,
             pointer: 0,
             is_halted: false,
 
-            input_reader: in_read,
-            input: in_write,
+            input_pointer: 0,
+            input: Vec::new(),
 
-            output_writer: out_write,
-            output: out_read
+            output: Vec::new()
         }
     }
 
@@ -220,25 +207,6 @@ impl Machine {
         }
 
         Ok(Machine::from_slots(slots))
-    }
-
-    // Returns a machine with the same memory and instruction pointer state as
-    // this machine, but new I/O channels.
-    pub fn duplicate(&self) -> Machine {
-        let (in_write, in_read) = channel();
-        let (out_write, out_read) = channel();
-
-        Machine {
-            slots: self.slots.clone(),
-            pointer: self.pointer.clone(),
-            is_halted: self.is_halted.clone(),
-
-            input_reader: in_read,
-            input: in_write,
-
-            output_writer: out_write,
-            output: out_read
-        }
     }
 
     pub fn run_to_halt(&mut self) -> Result<(), OperationalError> {
@@ -324,14 +292,15 @@ impl Machine {
                 self.set(instruction.parameters[2].value, left * right)?;
             },
             Opcode::Input => {
-                let val = self.input_reader.recv()
-                    .map_err(|e| OperationalError::InputError(e))?;
+                let val = *self.input.get(self.input_pointer)
+                    .ok_or_else(|| OperationalError::NoInput)?;
                 self.set(instruction.parameters[0].value, val)?;
+                self.input_pointer = self.input_pointer + 1;
             },
             Opcode::Output => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
-                self.output_writer.send(val)
-                    .map_err(|e| OperationalError::OutputError(e))?;
+
+                self.output.push(val);
             },
             Opcode::JumpIfTrue => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
@@ -369,6 +338,10 @@ impl Machine {
         }
 
         Ok(())
+    }
+
+    pub fn write(&mut self, input: Value) {
+        self.input.push(input);
     }
 }
 
@@ -454,8 +427,7 @@ mod tests {
         let mut machine = Machine::from_slots(vec![4, 0, 104, 20, 99]);
 
         machine.run_to_halt()?;
-        assert_eq!(4, machine.output.recv().unwrap());
-        assert_eq!(20, machine.output.recv().unwrap());
+        assert_eq!(vec![4, 20], machine.output);
 
         Ok(())
     }
@@ -463,7 +435,7 @@ mod tests {
     #[test]
     fn test_input() -> Result<(), OperationalError> {
         let mut machine = Machine::from_slots(vec![3, 3, 99, 0]);
-        machine.input.send(20).unwrap();
+        machine.write(20);
 
         machine.run_to_halt()?;
         assert_eq!(20, machine.slots[3]);
@@ -479,21 +451,21 @@ mod tests {
             999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99
         ]);
 
-        let mut low_input = machine.duplicate();
-        low_input.input.send(4).unwrap();
-        let mut exact_input = machine.duplicate();
-        exact_input.input.send(8).unwrap();
-        let mut high_input = machine.duplicate();
-        high_input.input.send(12).unwrap();
+        let mut low_input = machine.clone();
+        low_input.write(4);
+        let mut exact_input = machine.clone();
+        exact_input.write(8);
+        let mut high_input = machine.clone();
+        high_input.write(12);
 
         low_input.run_to_halt()?;
-        assert_eq!(999, low_input.output.recv().unwrap());
+        assert_eq!(vec![999], low_input.output);
 
         exact_input.run_to_halt()?;
-        assert_eq!(1000, exact_input.output.recv().unwrap());
+        assert_eq!(vec![1000], exact_input.output);
 
         high_input.run_to_halt()?;
-        assert_eq!(1001, high_input.output.recv().unwrap());
+        assert_eq!(vec![1001], high_input.output);
 
         Ok(())
     }

@@ -12,18 +12,18 @@ impl Problem for DayFive {
 
     fn part_one(&self, input: &str) -> String {
         let mut machine = Machine::from_str(input).unwrap();
-        machine.input.send(1).unwrap();
+        machine.write(1);
         machine.run_to_halt().unwrap();
 
-        format!("{}", machine.output.try_iter().join(" "))
+        format!("{}", machine.output.iter().join(" "))
     }
 
     fn part_two(&self, input: &str) -> String {
         let mut machine = Machine::from_str(input).unwrap();
-        machine.input.send(5).unwrap();
+        machine.write(5);
         machine.run_to_halt().unwrap();
 
-        format!("{}", machine.output.try_iter().join(" "))
+        format!("{}", machine.output.iter().join(" "))
     }
 }
 

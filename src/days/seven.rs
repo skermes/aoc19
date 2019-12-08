@@ -6,11 +6,11 @@ use crate::intcode::Machine;
 fn run_amplifiers(base_machine: &Machine, phase_settings: Vec<isize>) -> isize {
     let mut signal = 0;
     for setting in phase_settings {
-        let mut machine = base_machine.duplicate();
-        machine.input.send(setting).unwrap();
-        machine.input.send(signal).unwrap();
+        let mut machine = base_machine.clone();
+        machine.write(setting);
+        machine.write(signal);
         machine.run_to_halt().unwrap();
-        signal = machine.output.recv().unwrap();
+        signal = machine.output[0];
     }
     signal
 }
