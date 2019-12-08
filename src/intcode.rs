@@ -177,8 +177,10 @@ pub struct Machine {
     is_halted: bool,
 
     input_pointer: Address,
-    pub input: Vec<Value>,
-    pub output: Vec<Value>
+    input: Vec<Value>,
+
+    output_pointer: Address,
+    output: Vec<Value>
 }
 
 impl Machine {
@@ -191,6 +193,7 @@ impl Machine {
             input_pointer: 0,
             input: Vec::new(),
 
+            output_pointer: 0,
             output: Vec::new()
         }
     }
@@ -342,6 +345,16 @@ impl Machine {
 
     pub fn write(&mut self, input: Value) {
         self.input.push(input);
+    }
+
+    pub fn read(&mut self) -> Vec<Value> {
+        if self.output_pointer >= self.output.len() {
+            Vec::new()
+        } else {
+            let outslice = &self.output[self.output_pointer..self.output.len()];
+            self.output_pointer = self.output.len();
+            outslice.to_vec()
+        }
     }
 }
 

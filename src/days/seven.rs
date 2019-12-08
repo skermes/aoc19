@@ -10,7 +10,7 @@ fn run_amplifiers(base_machine: &Machine, phase_settings: Vec<isize>) -> isize {
         machine.write(setting);
         machine.write(signal);
         machine.run_to_halt().unwrap();
-        signal = machine.output[0];
+        signal = machine.read()[0];
     }
     signal
 }

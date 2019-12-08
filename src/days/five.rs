@@ -15,7 +15,7 @@ impl Problem for DayFive {
         machine.write(1);
         machine.run_to_halt().unwrap();
 
-        format!("{}", machine.output.iter().join(" "))
+        format!("{}", machine.read().iter().join(" "))
     }
 
     fn part_two(&self, input: &str) -> String {
@@ -23,7 +23,7 @@ impl Problem for DayFive {
         machine.write(5);
         machine.run_to_halt().unwrap();
 
-        format!("{}", machine.output.iter().join(" "))
+        format!("{}", machine.read().iter().join(" "))
     }
 }
 
