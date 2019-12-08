@@ -115,7 +115,7 @@ fn run_day(day: usize) -> std::io::Result<()> {
     let solution_two = problem.part_two(&input);
     let duration_two = duration_str(start_two.elapsed());
 
-    println!("Part One:");
+    println!("Part Two:");
     println!("    Solution: {}", solution_two);
     println!("    Duration: {}\n", duration_two);
 

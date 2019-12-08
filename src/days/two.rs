@@ -19,7 +19,7 @@ impl Problem for DayTwo {
         machine.set(1, 12).unwrap();
         machine.set(2, 2).unwrap();
 
-        machine.run_to_halt().unwrap();
+        machine.run().unwrap();
         format!("{}", machine.get(0).unwrap())
     }
 
@@ -34,7 +34,7 @@ impl Problem for DayTwo {
                 candidate.set(1, noun).unwrap();
                 candidate.set(2, verb).unwrap();
 
-                candidate.run_to_halt().unwrap();
+                candidate.run().unwrap();
                 if *candidate.get(0).unwrap() == target {
                     return format!("{}", 100 * noun + verb);
                 }

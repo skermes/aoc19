@@ -16,9 +16,7 @@ pub enum OperationalError {
     #[error("Instruction {0} is negative.")]
     NegativeInstruction(Value),
     #[error("Instruction has too many parameter mode digits for operation: {0}.")]
-    TooManyParameterModes(Value),
-    #[error("Tried to read past end of input")]
-    NoInput
+    TooManyParameterModes(Value)
 }
 
 #[derive(Debug, Error)]
@@ -170,17 +168,36 @@ impl Instruction {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MachineState {
+    Running,
+    Halted, // Halted means the machine has executed a Halt (99) instruction,
+    Blocked // while Blocked means it wants to execute an Input but has no input
+}
+
+impl std::fmt::Display for MachineState {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            MachineState::Running => "Running",
+            MachineState::Halted => "Halted",
+            MachineState::Blocked => "Blocked"
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Machine {
     slots: Vec<Value>,
     pointer: Address,
-    is_halted: bool,
+    state: MachineState,
 
     input_pointer: Address,
     input: Vec<Value>,
 
     output_pointer: Address,
-    output: Vec<Value>
+    output: Vec<Value>,
+
+    instruction_counter: usize
 }
 
 impl Machine {
@@ -188,13 +205,15 @@ impl Machine {
         Machine {
             slots: slots,
             pointer: 0,
-            is_halted: false,
+            state: MachineState::Running,
 
             input_pointer: 0,
             input: Vec::new(),
 
             output_pointer: 0,
-            output: Vec::new()
+            output: Vec::new(),
+
+            instruction_counter: 0
         }
     }
 
@@ -212,13 +231,13 @@ impl Machine {
         Ok(Machine::from_slots(slots))
     }
 
-    pub fn run_to_halt(&mut self) -> Result<(), OperationalError> {
+    pub fn run(&mut self) -> Result<(), OperationalError> {
         self.execute_instruction(&self.read_instruction()?)?;
 
-        if self.is_halted {
-            Ok(())
-        } else {
-            self.run_to_halt()
+        match self.state {
+            MachineState::Halted => Ok(()),
+            MachineState::Blocked => Ok(()),
+            _ => self.run()
         }
     }
 
@@ -270,7 +289,7 @@ impl Machine {
     }
 
     fn execute_instruction(&mut self, instruction: &Instruction) -> Result<(), OperationalError> {
-        if self.is_halted {
+        if self.state != MachineState::Running {
             return Ok(());
         }
 
@@ -280,7 +299,7 @@ impl Machine {
         // read_instruction.
         match instruction.opcode {
             Opcode::Halt => {
-                self.is_halted = true;
+                self.state = MachineState::Halted;
             },
             Opcode::Add => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
@@ -295,10 +314,20 @@ impl Machine {
                 self.set(instruction.parameters[2].value, left * right)?;
             },
             Opcode::Input => {
-                let val = *self.input.get(self.input_pointer)
-                    .ok_or_else(|| OperationalError::NoInput)?;
-                self.set(instruction.parameters[0].value, val)?;
-                self.input_pointer = self.input_pointer + 1;
+                match self.input.get(self.input_pointer) {
+                    None => {
+                        self.state = MachineState::Blocked;
+                        advance_pointer = false;
+                        self.instruction_counter -= 1;
+                    },
+                    Some(_) => {
+                        // This is dumb, but it's my best guess of how to get
+                        // around the borrow reservation conflict thing.
+                        let val = *self.input.get(self.input_pointer).unwrap();
+                        self.set(instruction.parameters[0].value, val)?;
+                        self.input_pointer += 1;
+                    }
+                }
             },
             Opcode::Output => {
                 let val = self.get_parameter_val(&instruction.parameters[0])?;
@@ -340,11 +369,17 @@ impl Machine {
             self.pointer += instruction.opcode.parameter_count() + 1;
         }
 
+        self.instruction_counter += 1;
+
         Ok(())
     }
 
     pub fn write(&mut self, input: Value) {
         self.input.push(input);
+
+        if self.state == MachineState::Blocked {
+            self.state = MachineState::Running;
+        }
     }
 
     pub fn read(&mut self) -> Vec<Value> {
@@ -355,6 +390,17 @@ impl Machine {
             self.output_pointer = self.output.len();
             outslice.to_vec()
         }
+    }
+
+    pub fn state(&self) -> MachineState {
+        self.state
+    }
+
+    // Allowing dead code because this is used for debugging, not in any
+    // actual puzzles.
+    #[allow(dead_code)]
+    pub fn instruction_counter(&self) -> usize {
+        self.instruction_counter
     }
 }
 
@@ -369,7 +415,7 @@ mod tests {
         let machine = Machine::from_str(input)?;
 
         assert_eq!(0, machine.pointer);
-        assert_eq!(false, machine.is_halted);
+        assert_eq!(MachineState::Running, machine.state);
         assert_eq!(1, machine.slots[0]);
         assert_eq!(9, machine.slots[1]);
         assert_eq!(12, machine.slots.len());
@@ -383,14 +429,14 @@ mod tests {
 
         machine.execute_instruction(&machine.read_instruction()?)?;
         assert_eq!(70, machine.slots[3]);
-        assert_eq!(false, machine.is_halted);
+        assert_eq!(MachineState::Running, machine.state);
 
         machine.execute_instruction(&machine.read_instruction()?)?;
         assert_eq!(3500, machine.slots[0]);
-        assert_eq!(false, machine.is_halted);
+        assert_eq!(MachineState::Running, machine.state);
 
         machine.execute_instruction(&machine.read_instruction()?)?;
-        assert_eq!(true, machine.is_halted);
+        assert_eq!(MachineState::Halted, machine.state);
 
         Ok(())
     }
@@ -399,9 +445,9 @@ mod tests {
     fn run_to_halt() -> Result<(), OperationalError> {
         let mut machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
-        machine.run_to_halt()?;
+        machine.run()?;
         assert_eq!(3500, machine.slots[0]);
-        assert_eq!(true, machine.is_halted);
+        assert_eq!(MachineState::Halted, machine.state);
 
         Ok(())
     }
@@ -439,7 +485,7 @@ mod tests {
     fn test_output() -> Result<(), OperationalError> {
         let mut machine = Machine::from_slots(vec![4, 0, 104, 20, 99]);
 
-        machine.run_to_halt()?;
+        machine.run()?;
         assert_eq!(vec![4, 20], machine.output);
 
         Ok(())
@@ -450,7 +496,7 @@ mod tests {
         let mut machine = Machine::from_slots(vec![3, 3, 99, 0]);
         machine.write(20);
 
-        machine.run_to_halt()?;
+        machine.run()?;
         assert_eq!(20, machine.slots[3]);
 
         Ok(())
@@ -471,14 +517,49 @@ mod tests {
         let mut high_input = machine.clone();
         high_input.write(12);
 
-        low_input.run_to_halt()?;
+        low_input.run()?;
         assert_eq!(vec![999], low_input.output);
 
-        exact_input.run_to_halt()?;
+        exact_input.run()?;
         assert_eq!(vec![1000], exact_input.output);
 
-        high_input.run_to_halt()?;
+        high_input.run()?;
         assert_eq!(vec![1001], high_input.output);
+
+        Ok(())
+    }
+
+    #[test]
+    fn blocked() -> Result<(), OperationalError> {
+        let mut machine = Machine::from_slots(vec![
+            3, 7, 3, 8, 3, 9, 99, 0, 0, 0
+        ]);
+
+        machine.run()?;
+
+        assert_eq!(MachineState::Blocked, machine.state);
+
+        machine.write(10);
+
+        assert_eq!(MachineState::Running, machine.state);
+
+        machine.run()?;
+
+        assert_eq!(MachineState::Blocked, machine.state);
+
+        machine.write(20);
+        machine.write(30);
+
+        machine.run()?;
+
+        assert_eq!(MachineState::Halted, machine.state);
+
+        machine.write(40);
+
+        assert_eq!(MachineState::Halted, machine.state);
+        assert_eq!(10, machine.slots[7]);
+        assert_eq!(20, machine.slots[8]);
+        assert_eq!(30, machine.slots[9]);
 
         Ok(())
     }

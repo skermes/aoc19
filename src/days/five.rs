@@ -13,7 +13,7 @@ impl Problem for DayFive {
     fn part_one(&self, input: &str) -> String {
         let mut machine = Machine::from_str(input).unwrap();
         machine.write(1);
-        machine.run_to_halt().unwrap();
+        machine.run().unwrap();
 
         format!("{}", machine.read().iter().join(" "))
     }
@@ -21,7 +21,7 @@ impl Problem for DayFive {
     fn part_two(&self, input: &str) -> String {
         let mut machine = Machine::from_str(input).unwrap();
         machine.write(5);
-        machine.run_to_halt().unwrap();
+        machine.run().unwrap();
 
         format!("{}", machine.read().iter().join(" "))
     }
