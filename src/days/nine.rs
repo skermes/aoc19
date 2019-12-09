@@ -23,7 +23,11 @@ impl Problem for DayNine {
         machine.write(2);
         machine.run().unwrap();
 
-        machine.read().iter().join(" ").to_string()
+        format!(
+            "{}         ({} instructions)",
+            machine.read().iter().join(" "),
+            machine.instruction_counter()
+        )
     }
 }
 
