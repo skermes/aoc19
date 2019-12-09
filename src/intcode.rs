@@ -671,4 +671,33 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn day9_examples() -> Result<(), OperationalError> {
+        let mut quine = Machine::from_slots(vec![
+            109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99
+        ]);
+        quine.run()?;
+
+        assert_eq!(
+            vec![109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99],
+            quine.read()
+        );
+
+        let mut large_output_1 = Machine::from_slots(vec![
+            1102,34915192,34915192,7,4,7,99,0
+        ]);
+        large_output_1.run()?;
+
+        assert_eq!(16, digits(large_output_1.read()[0]).len());
+
+        let mut large_output_2 = Machine::from_slots(vec![
+            104,1125899906842624,99
+        ]);
+        large_output_2.run()?;
+
+        assert_eq!(vec![1125899906842624], large_output_2.read());
+
+        Ok(())
+    }
 }
