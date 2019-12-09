@@ -318,7 +318,6 @@ impl Machine {
                     None => {
                         self.state = MachineState::Blocked;
                         advance_pointer = false;
-                        self.instruction_counter -= 1;
                     },
                     Some(_) => {
                         // This is dumb, but it's my best guess of how to get
