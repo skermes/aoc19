@@ -241,7 +241,8 @@ impl Machine {
     }
 
     pub fn run(&mut self) -> Result<(), OperationalError> {
-        self.execute_instruction(&self.read_instruction()?)?;
+        let instruction = self.read_instruction()?;
+        self.execute_instruction(&instruction)?;
 
         match self.state {
             MachineState::Halted => Ok(()),
@@ -250,9 +251,21 @@ impl Machine {
         }
     }
 
-    pub fn get<I>(&self, index: I) -> Result<&Value, OperationalError>
+    fn grow_memory_for(&mut self, index: Address) {
+        if index >= self.slots.len() {
+            // +1 here so that index is a valid index, not the length.
+            self.slots.resize_with(index + 1, Default::default);
+        }
+    }
+
+    pub fn get<I>(&mut self, index: I) -> Result<&Value, OperationalError>
     where I: IntoAddress {
         let addr = index.into_addr()?;
+        self.grow_memory_for(addr);
+
+        // It should be impossible to get this OutOfRange error now because we
+        // make every address fit, but we have to unwrap the option somehow and
+        // I'd rather have this than a random panic.
         self.slots.get(addr)
             .ok_or_else(|| OperationalError::OutOfRange(addr))
     }
@@ -260,6 +273,8 @@ impl Machine {
     pub fn set<I>(&mut self, index: I, new_value: Value) -> Result<(), OperationalError>
     where I: IntoAddress {
         let addr = index.into_addr()?;
+        self.grow_memory_for(addr);
+
         match self.slots.get_mut(addr) {
             Some(old_value) => {
                 *old_value = new_value;
@@ -269,7 +284,7 @@ impl Machine {
         }
     }
 
-    fn get_parameter_val(&self, parameter: &Parameter) -> Result<Value, OperationalError> {
+    fn get_parameter_val(&mut self, parameter: &Parameter) -> Result<Value, OperationalError> {
         match parameter.mode {
             ParameterMode::Positional => Ok(*self.get(parameter.value)?),
             ParameterMode::Immediate => Ok(parameter.value),
@@ -288,7 +303,7 @@ impl Machine {
         }
     }
 
-    fn read_instruction(&self) -> Result<Instruction, OperationalError> {
+    fn read_instruction(&mut self) -> Result<Instruction, OperationalError> {
         let instruction_val = self.get(self.pointer)?;
         let (opcode, mode_digits) = Instruction::op_and_mode_digits(instruction_val)?;
 
@@ -451,15 +466,18 @@ mod tests {
     fn step() -> Result<(), OperationalError> {
         let mut machine = Machine::from_slots(vec![1,9,10,3,2,3,11,0,99,30,40,50]);
 
-        machine.execute_instruction(&machine.read_instruction()?)?;
+        let instruction = machine.read_instruction()?;
+        machine.execute_instruction(&instruction)?;
         assert_eq!(70, machine.slots[3]);
         assert_eq!(MachineState::Running, machine.state);
 
-        machine.execute_instruction(&machine.read_instruction()?)?;
+        let instruction = machine.read_instruction()?;
+        machine.execute_instruction(&instruction)?;
         assert_eq!(3500, machine.slots[0]);
         assert_eq!(MachineState::Running, machine.state);
 
-        machine.execute_instruction(&machine.read_instruction()?)?;
+        let instruction = machine.read_instruction()?;
+        machine.execute_instruction(&instruction)?;
         assert_eq!(MachineState::Halted, machine.state);
 
         Ok(())
@@ -638,6 +656,18 @@ mod tests {
 
         machine.run()?;
         assert_eq!(4, machine.relative_base);
+
+        Ok(())
+    }
+
+    #[test]
+    fn growable_memory() -> Result<(), OperationalError> {
+        let mut machine = Machine::from_slots(vec![
+            1, 5, 6, 20, 99, 6, 7
+        ]);
+        machine.run()?;
+
+        assert_eq!(&13, machine.get(20)?);
 
         Ok(())
     }
