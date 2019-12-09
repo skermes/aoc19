@@ -16,7 +16,9 @@ pub enum OperationalError {
     #[error("Instruction {0} is negative.")]
     NegativeInstruction(Value),
     #[error("Instruction has too many parameter mode digits for operation: {0}.")]
-    TooManyParameterModes(Value)
+    TooManyParameterModes(Value),
+    #[error("Cannot use immediate mode parameter as address to set value.")]
+    ImmediateModeStorage
 }
 
 #[derive(Debug, Error)]
@@ -101,10 +103,11 @@ impl Opcode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum ParameterMode {
     Positional,
-    Immediate
+    Immediate,
+    Relative
 }
 
 impl ParameterMode {
@@ -114,6 +117,7 @@ impl ParameterMode {
                 match val {
                     0 => Ok(ParameterMode::Positional),
                     1 => Ok(ParameterMode::Immediate),
+                    2 => Ok(ParameterMode::Relative),
                     _ => Err(OperationalError::InvalidParameterMode(*val))
                 }
             },
@@ -124,7 +128,7 @@ impl ParameterMode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Parameter {
     value: Value,
     mode: ParameterMode
@@ -140,7 +144,7 @@ fn digits(n: isize) -> Vec<isize> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Instruction {
     opcode: Opcode,
     parameters: Vec<Parameter>
@@ -190,6 +194,7 @@ pub struct Machine {
     slots: Vec<Value>,
     pointer: Address,
     state: MachineState,
+    relative_base: Value,
 
     input_pointer: Address,
     input: Vec<Value>,
@@ -206,6 +211,7 @@ impl Machine {
             slots: slots,
             pointer: 0,
             state: MachineState::Running,
+            relative_base: 0,
 
             input_pointer: 0,
             input: Vec::new(),
@@ -263,7 +269,19 @@ impl Machine {
     fn get_parameter_val(&self, parameter: &Parameter) -> Result<Value, OperationalError> {
         match parameter.mode {
             ParameterMode::Positional => Ok(*self.get(parameter.value)?),
-            ParameterMode::Immediate => Ok(parameter.value)
+            ParameterMode::Immediate => Ok(parameter.value),
+            ParameterMode::Relative => Ok(*self.get(self.relative_base + parameter.value)?)
+        }
+    }
+
+    fn set_at_parameter(&mut self, parameter: &Parameter, value: Value) -> Result<(), OperationalError> {
+        match parameter.mode {
+            ParameterMode::Positional => self.set(parameter.value, value),
+            ParameterMode::Relative => self.set(
+                parameter.value + self.relative_base,
+                value
+            ),
+            ParameterMode::Immediate => Err(OperationalError::ImmediateModeStorage)
         }
     }
 
@@ -305,13 +323,13 @@ impl Machine {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
-                self.set(instruction.parameters[2].value, left + right)?;
+                self.set_at_parameter(&instruction.parameters[2], left + right)?;
             },
             Opcode::Multiply => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
-                self.set(instruction.parameters[2].value, left * right)?;
+                self.set_at_parameter(&instruction.parameters[2], left * right)?;
             },
             Opcode::Input => {
                 match self.input.get(self.input_pointer) {
@@ -323,7 +341,7 @@ impl Machine {
                         // This is dumb, but it's my best guess of how to get
                         // around the borrow reservation conflict thing.
                         let val = *self.input.get(self.input_pointer).unwrap();
-                        self.set(instruction.parameters[0].value, val)?;
+                        self.set_at_parameter(&instruction.parameters[0], val)?;
                         self.input_pointer += 1;
                     }
                 }
@@ -352,14 +370,14 @@ impl Machine {
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
                 let value = if left < right { 1 } else { 0 };
-                self.set(instruction.parameters[2].value, value)?;
+                self.set_at_parameter(&instruction.parameters[2], value)?;
             },
             Opcode::Equals => {
                 let left = self.get_parameter_val(&instruction.parameters[0])?;
                 let right = self.get_parameter_val(&instruction.parameters[1])?;
 
                 let value = if left == right { 1 } else { 0 };
-                self.set(instruction.parameters[2].value, value)?;
+                self.set_at_parameter(&instruction.parameters[2], value)?;
             }
         }
 
@@ -559,6 +577,49 @@ mod tests {
         assert_eq!(10, machine.slots[7]);
         assert_eq!(20, machine.slots[8]);
         assert_eq!(30, machine.slots[9]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn relative_mode() -> Result<(), OperationalError> {
+        let mut machine = Machine::from_slots(vec![
+            21201, 3, 2, 5, 99, 0, 0, 0, 0, 0, 0, 0, 0
+        ]);
+
+        let instruction = machine.read_instruction()?;
+        assert_eq!(
+            Instruction {
+                opcode: Opcode::Add,
+                parameters: vec![
+                    Parameter {
+                        value: 3,
+                        mode: ParameterMode::Relative
+                    },
+                    Parameter {
+                        value: 2,
+                        mode: ParameterMode::Immediate
+                    },
+                    Parameter {
+                        value: 5,
+                        mode: ParameterMode::Relative
+                    }
+                ]
+            },
+            instruction
+        );
+
+        machine.run()?;
+
+        assert_eq!(7, machine.slots[5]);
+
+        let mut machine = Machine::from_slots(vec![
+            21201, 3, 2, 5, 99, 0, 0, 0, 10, 0, 0, 0, 0
+        ]);
+        machine.relative_base = 5;
+        machine.run()?;
+
+        assert_eq!(12, machine.slots[10]);
 
         Ok(())
     }
