@@ -1,10 +1,17 @@
+use itertools::Itertools;
+
 use crate::problem::Problem;
+use crate::intcode::Machine;
 
 pub struct DayNine {}
 
 impl Problem for DayNine {
     fn part_one(&self, input: &str) -> String {
-        format!("{}", "Part one not yet implemented.")
+        let mut machine = Machine::from_str(input).unwrap();
+        machine.write(1);
+        machine.run().unwrap();
+
+        machine.read().iter().join(" ").to_string()
     }
 
     fn part_two(&self, input: &str) -> String {
