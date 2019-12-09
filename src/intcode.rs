@@ -69,6 +69,7 @@ enum Opcode {
     JumpIfFalse,
     LessThan,
     Equals,
+    RelativeBaseOffset,
     Halt
 }
 
@@ -83,6 +84,7 @@ impl Opcode {
             6 => Ok(Opcode::JumpIfFalse),
             7 => Ok(Opcode::LessThan),
             8 => Ok(Opcode::Equals),
+            9 => Ok(Opcode::RelativeBaseOffset),
             99 => Ok(Opcode::Halt),
             _ => Err(OperationalError::InvalidOpcode(i))
         }
@@ -98,6 +100,7 @@ impl Opcode {
             Opcode::JumpIfFalse => 2,
             Opcode::LessThan => 3,
             Opcode::Equals => 3,
+            Opcode::RelativeBaseOffset => 1,
             Opcode::Halt => 0
         }
     }
@@ -378,6 +381,10 @@ impl Machine {
 
                 let value = if left == right { 1 } else { 0 };
                 self.set_at_parameter(&instruction.parameters[2], value)?;
+            },
+            Opcode::RelativeBaseOffset => {
+                let value = self.get_parameter_val(&instruction.parameters[0])?;
+                self.relative_base += value;
             }
         }
 
@@ -620,6 +627,17 @@ mod tests {
         machine.run()?;
 
         assert_eq!(12, machine.slots[10]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn relative_base_offset() -> Result<(), OperationalError> {
+        let mut machine = Machine::from_slots(vec![109, 4, 99]);
+        assert_eq!(0, machine.relative_base);
+
+        machine.run()?;
+        assert_eq!(4, machine.relative_base);
 
         Ok(())
     }
