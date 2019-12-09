@@ -241,13 +241,15 @@ impl Machine {
     }
 
     pub fn run(&mut self) -> Result<(), OperationalError> {
-        let instruction = self.read_instruction()?;
-        self.execute_instruction(&instruction)?;
+        loop {
+            let instruction = self.read_instruction()?;
+            self.execute_instruction(&instruction)?;
 
-        match self.state {
-            MachineState::Halted => Ok(()),
-            MachineState::Blocked => Ok(()),
-            _ => self.run()
+            match self.state {
+                MachineState::Halted => return Ok(()),
+                MachineState::Blocked => return Ok(()),
+                _ => {}
+            }
         }
     }
 
