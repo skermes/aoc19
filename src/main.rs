@@ -104,7 +104,7 @@ fn run_day(day: usize) -> std::io::Result<()> {
     println!("=========={:=<60}\n", title);
 
     let start_one = Instant::now();
-    let solution_one = problem.part_one(&input);
+    let solution_one = problem.part_one(&input.trim());
     let duration_one = duration_str(start_one.elapsed());
 
     println!("Part One:");
@@ -112,7 +112,7 @@ fn run_day(day: usize) -> std::io::Result<()> {
     println!("    Duration: {}\n", duration_one);
 
     let start_two = Instant::now();
-    let solution_two = problem.part_two(&input);
+    let solution_two = problem.part_two(&input.trim());
     let duration_two = duration_str(start_two.elapsed());
 
     println!("Part Two:");
