@@ -433,6 +433,14 @@ impl Machine {
         }
     }
 
+    pub fn peek(&self) -> usize {
+        if self.output_pointer >= self.output.len() {
+            0
+        } else {
+            self.output.len() - self.output_pointer
+        }
+    }
+
     pub fn state(&self) -> MachineState {
         self.state
     }

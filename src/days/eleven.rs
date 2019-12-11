@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::fmt;
+use thiserror::Error;
 
 use crate::problem::Problem;
 use crate::intcode::{Machine,MachineState,OperationalError};
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum PaintingError {
@@ -11,7 +12,9 @@ enum PaintingError {
     #[error("`{0}` is not a valid turn.")]
     InvalidTurn(isize),
     #[error("Error encountered while running intcode program.")]
-    IntcodeError(#[from] OperationalError)
+    IntcodeError(#[from] OperationalError),
+    #[error("Brain is still running after `run` exited.")]
+    BrainStillRunning
 }
 
 type PaintingResult<T> = Result<T, PaintingError>;
@@ -26,6 +29,15 @@ struct Point {
 enum Color {
     Black,
     White
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            Color::Black => " ",
+            Color::White => "#"
+        })
+    }
 }
 
 impl Color {
@@ -94,6 +106,17 @@ impl Facing {
             Turn::Right => self.rightwards()
         }
     }
+
+    fn step(&self, start: &Point) -> Point {
+        let mut new_point = start.clone();
+        match self {
+            Facing::Up => new_point.y -= 1,
+            Facing::Down => new_point.y += 1,
+            Facing::Left => new_point.x -= 1,
+            Facing::Right => new_point.x += 1
+        };
+        new_point
+    }
 }
 
 #[derive(Debug)]
@@ -118,6 +141,15 @@ impl PainterBot {
         self.canvas.get(point).or(Some(&Color::Black)).unwrap()
     }
 
+    fn paint(&mut self, color: Color) {
+        self.canvas.insert(self.location, color);
+    }
+
+    fn step(&mut self, turn: Turn) {
+        self.facing = self.facing.turn(turn);
+        self.location = self.facing.step(&self.location);
+    }
+
     fn run(&mut self) -> PaintingResult<()> {
         loop {
             self.brain.run()?;
@@ -125,12 +157,39 @@ impl PainterBot {
             match self.brain.state() {
                 MachineState::Halted => { return Ok(()); },
                 MachineState::Blocked => {
+                    if self.brain.peek() >= 2 {
+                        let output = self.brain.read();
+                        self.paint(Color::from_int(output[0])?);
+                        self.step(Turn::from_int(output[1])?);
+                    }
+
                     self.brain.write(self.color_at(&self.location).to_int());
                 },
                 // Shouldn't ever get here after `run`.
-                MachineState::Running => { }
+                MachineState::Running => {
+                    return Err(PaintingError::BrainStillRunning)
+                }
             }
         }
+    }
+
+    fn canvas_str(&self) -> String {
+        let mut painting = String::new();
+        painting.push_str("\n");
+
+        let min_x = self.canvas.keys().map(|p| p.x).min().unwrap();
+        let min_y = self.canvas.keys().map(|p| p.y).min().unwrap();
+        let max_x = self.canvas.keys().map(|p| p.x).max().unwrap();
+        let max_y = self.canvas.keys().map(|p| p.y).max().unwrap();
+
+        for y in min_y..max_y + 1 {
+            for x in min_x..max_x + 1 {
+                painting.push_str(&format!("{}", self.color_at(&Point { x: x, y: y })));
+            }
+            painting.push_str("\n");
+        }
+
+        painting
     }
 }
 
@@ -138,11 +197,22 @@ pub struct DayEleven {}
 
 impl Problem for DayEleven {
     fn part_one(&self, input: &str) -> String {
-        format!("{}", "Part one not yet implemented.")
+        let machine = Machine::from_str(input).unwrap();
+        let mut painter = PainterBot::new(machine);
+
+        painter.run().unwrap();
+
+        painter.canvas.len().to_string()
     }
 
     fn part_two(&self, input: &str) -> String {
-        format!("{}", "Part two not yet implemented.")
+        let machine = Machine::from_str(input).unwrap();
+        let mut painter = PainterBot::new(machine);
+
+        painter.paint(Color::White);
+        painter.run().unwrap();
+
+        painter.canvas_str()
     }
 }
 
