@@ -1,3 +1,7 @@
+// Didn't feel like finishing this one, ignore the dead code here until I come
+// back to it.
+#![allow(dead_code)]
+
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use thiserror::Error;
