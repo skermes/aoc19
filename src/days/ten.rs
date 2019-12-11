@@ -115,16 +115,16 @@ impl Problem for DayTen {
     fn part_one(&self, input: &str) -> String {
         let map = str2map(EXAMPLE).unwrap();
 
-        for x in 0..5 {
-            for y in 0..5 {
-                let station = Point { x: x, y: y };
-                match map[&station] {
-                    SpaceObject::Space => print!("."),
-                    SpaceObject::Asteroid => print!("{}", points_visible_from(station, &map))
-                }
-            }
-            println!("");
-        }
+        // for x in 0..5 {
+        //     for y in 0..5 {
+        //         let station = Point { x: x, y: y };
+        //         match map[&station] {
+        //             SpaceObject::Space => print!("."),
+        //             SpaceObject::Asteroid => print!("{}", points_visible_from(station, &map))
+        //         }
+        //     }
+        //     println!("");
+        // }
 
         format!("{}", "Part one not yet implemented.")
     }
