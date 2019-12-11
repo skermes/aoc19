@@ -196,6 +196,10 @@ impl PainterBot {
 pub struct DayEleven {}
 
 impl Problem for DayEleven {
+    fn name(&self) -> String {
+        "Space Police".to_string()
+    }
+
     fn part_one(&self, input: &str) -> String {
         let machine = Machine::from_str(input).unwrap();
         let mut painter = PainterBot::new(machine);
