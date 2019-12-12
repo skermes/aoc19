@@ -18,7 +18,9 @@ pub enum OperationalError {
     #[error("Instruction has too many parameter mode digits for operation: {0}.")]
     TooManyParameterModes(Value),
     #[error("Cannot use immediate mode parameter as address to set value.")]
-    ImmediateModeStorage
+    ImmediateModeStorage,
+    #[error("Impossible set of mode digits: `{0}`.")]
+    InvalidModeDigits(Value)
 }
 
 #[derive(Debug, Error)]
@@ -137,14 +139,39 @@ struct Parameter {
     mode: ParameterMode
 }
 
-fn digits(n: isize) -> Vec<isize> {
-    if n < 10 {
-        vec![n]
-    } else {
-        let mut rest = digits(n / 10);
-        rest.push(n % 10);
-        rest
-    }
+// Because we know that no instruction has more than three parameters we can
+// inline this for a non-trivial performance boost.
+fn mode_int_to_vec(mode: isize) -> Result<Vec<isize>, OperationalError> {
+    Ok(match mode {
+        0 => vec![],
+        1 => vec![1],
+        2 => vec![2],
+        10 => vec![1, 0],
+        11 => vec![1, 1],
+        12 => vec![1, 2],
+        20 => vec![2, 0],
+        21 => vec![2, 1],
+        22 => vec![2, 2],
+        100 => vec![1, 0, 0],
+        101 => vec![1, 0, 1],
+        102 => vec![1, 0, 2],
+        110 => vec![1, 1, 0],
+        111 => vec![1, 1, 1],
+        112 => vec![1, 1, 2],
+        120 => vec![1, 2, 0],
+        121 => vec![1, 2, 1],
+        122 => vec![1, 2, 2],
+        200 => vec![2, 0, 0],
+        201 => vec![2, 0, 1],
+        202 => vec![2, 0, 2],
+        210 => vec![2, 1, 0],
+        211 => vec![2, 1, 1],
+        212 => vec![2, 1, 2],
+        220 => vec![2, 2, 0],
+        221 => vec![2, 2, 1],
+        222 => vec![2, 2, 2],
+        _ => return Err(OperationalError::InvalidModeDigits(mode))
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -160,14 +187,7 @@ impl Instruction {
         }
 
         let opcode = Opcode::from_int(*value % 100)?;
-
-        let mode_part = *value / 100;
-        let mode_digits: Vec<isize>;
-        if mode_part == 0 {
-            mode_digits = Vec::new();
-        } else {
-            mode_digits = digits(mode_part);
-        }
+        let mode_digits = mode_int_to_vec(*value / 100)?;
 
         // Reverse here because of the weird way the mode digits are set; see
         // problem description.
@@ -505,11 +525,6 @@ mod tests {
     }
 
     #[test]
-    fn test_digits() {
-        assert_eq!(vec![1, 0], digits(10));
-    }
-
-    #[test]
     fn op_and_modes_add() -> Result<(), OperationalError> {
         let (op, modes) = Instruction::op_and_mode_digits(&1)?;
         assert_eq!(Opcode::Add, op);
@@ -699,7 +714,7 @@ mod tests {
         ]);
         large_output_1.run()?;
 
-        assert_eq!(16, digits(large_output_1.read()[0]).len());
+        assert_eq!(16, format!("{}", large_output_1.read()[0]).len());
 
         let mut large_output_2 = Machine::from_slots(vec![
             104,1125899906842624,99
