@@ -184,7 +184,7 @@ impl PainterBot {
 
         for y in min_y..max_y + 1 {
             for x in min_x..max_x + 1 {
-                painting.push_str(&format!("{}", self.color_at(&Point { x: x, y: y })));
+                painting.push_str(&self.color_at(&Point { x: x, y: y }).to_string());
             }
             painting.push_str("\n");
         }
